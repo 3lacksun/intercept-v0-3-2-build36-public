@@ -162,4 +162,16 @@ if theme31.exists():
     )
     theme31.write_text(xml)
 
+# Adaptive-icon XML cannot be used as <bitmap src> in the window background.
+# Inflating that layer-list during Activity.super.onCreate kills the process
+# before Compose runs.
+launch_bg = Path("src/app/src/main/res/drawable/intercept_launch_background.xml")
+launch_bg.write_text(
+    """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<layer-list xmlns:android=\"http://schemas.android.com/apk/res/android\">
+    <item android:drawable=\"@color/stone_lab_white\" />
+</layer-list>
+"""
+)
+
 print("boot-path patches applied")
