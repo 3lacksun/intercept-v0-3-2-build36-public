@@ -43,6 +43,10 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/harden_boot.py
+          python3 tools/samsung_safe.py
+          grep -F 'Configuration.Provider' src/app/src/main/java/com/nexarenew/aiconsole/KotlinCommandApp.kt
+          grep -F 'WorkManagerInitializer' src/app/src/main/AndroidManifest.xml
+          grep -F 'Theme.DeviceDefault.Light.NoActionBar' src/app/src/main/res/values/themes.xml
           grep -F 'fun onOpen' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
           grep -F 'fun onDowngrade' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
           grep -F 'tableExists' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
