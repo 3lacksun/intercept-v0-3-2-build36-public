@@ -50,6 +50,11 @@ jobs:
           grep -F 'inputData.getBoolean(KEY_EXPLICIT, false)' src/app/src/main/java/com/nexarenew/aiconsole/tasks/OutboxRetryWorker.kt
           grep -F 'painterResource(R.drawable.ic_intercept_foreground)' src/app/src/main/java/com/nexarenew/aiconsole/MainActivity.kt
           grep -F '@drawable/ic_intercept_foreground' src/app/src/main/res/values-v31/themes.xml
+          grep -F '@color/stone_lab_white' src/app/src/main/res/drawable/intercept_launch_background.xml
+          if grep -F '@mipmap/ic_launcher' src/app/src/main/res/drawable/intercept_launch_background.xml; then
+            echo 'launch background still references adaptive mipmap' >&2
+            exit 1
+          fi
 
       - name: Restore Gradle wrapper jar and launcher icons
         run: |
