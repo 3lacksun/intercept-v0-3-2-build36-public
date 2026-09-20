@@ -12,13 +12,9 @@ import com.nexarenew.aiconsole.data.AppRepository
 import com.nexarenew.aiconsole.network.ProviderClient
 import com.nexarenew.aiconsole.security.SecureKeyStore
 import com.nexarenew.aiconsole.security.PinManager
-import com.nexarenew.aiconsole.tasks.OutboxRetryWorker
-import com.nexarenew.aiconsole.tasks.ConnectivityRetryObserver
-import com.nexarenew.aiconsole.tasks.DocumentIndexWorker
 import com.nexarenew.aiconsole.settings.AppPreferences
+import com.nexarenew.aiconsole.tasks.ConnectivityRetryObserver
 import java.io.File
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.flow.first
 
 class KotlinCommandApp : Application(), Configuration.Provider {
     lateinit var repository: AppRepository
@@ -27,21 +23,13 @@ class KotlinCommandApp : Application(), Configuration.Provider {
         private set
     lateinit var preferences: AppPreferences
         private set
-    private lateinit var connectivityRetryObserver: ConnectivityRetryObserver
+    private var connectivityRetryObserver: ConnectivityRetryObserver? = null
 
     override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder().setMinimumLoggingLevel(Log.INFO).build()
+        get() = Configuration.Builder().setMinimumLoggingLevel(Log.ERROR).build()
 
     override fun onCreate() {
         super.onCreate()
-        runCatching { ensureWorkManager() }.onFailure {
-            Log.e("INTERCEPT", "WorkManager init skipped", it)
-        }
-        runCatching {
-            Class.forName("com.tom_roush.pdfbox.android.PDFBoxResourceLoader")
-                .getMethod("init", android.content.Context::class.java)
-                .invoke(null, this)
-        }.onFailure { Log.w("INTERCEPT", "PDFBox init skipped", it) }
         val db = AppDatabase(this)
         runCatching { db.writableDatabase }.onFailure {
             Log.e("INTERCEPT", "Database open/heal failed", it)
@@ -52,24 +40,19 @@ class KotlinCommandApp : Application(), Configuration.Provider {
         pinManager = PinManager(this, keys)
         preferences = AppPreferences(this)
         connectivityRetryObserver = ConnectivityRetryObserver(this)
-        val automaticBackground = runCatching {
-            runBlocking {
-                preferences.migrateToUnifiedControls()
-                preferences.automaticBackgroundWorkEnabled.first()
-            }
-        }.getOrDefault(false)
-        if (automaticBackground) {
-            runCatching { OutboxRetryWorker.enqueuePeriodic(this) }
-            runCatching { DocumentIndexWorker.recoverInterrupted(this, repository) }
-            runCatching { connectivityRetryObserver.start() }
-        }
+        runCatching {
+            Class.forName("com.tom_roush.pdfbox.android.PDFBoxResourceLoader")
+                .getMethod("init", android.content.Context::class.java)
+                .invoke(null, this)
+        }.onFailure { Log.w("INTERCEPT", "PDFBox init skipped", it) }
     }
 
-    private fun ensureWorkManager() {
+    fun ensureWorkManager() {
         val started = runCatching { WorkManager.getInstance(this); true }.getOrDefault(false)
         if (started) return
         deleteWorkManagerStore()
-        WorkManager.initialize(this, workManagerConfiguration)
+        runCatching { WorkManager.initialize(this, workManagerConfiguration) }
+            .onFailure { Log.e("INTERCEPT", "WorkManager init skipped", it) }
     }
 
     private fun deleteWorkManagerStore() {
@@ -108,11 +91,43 @@ if v31.exists():
 <resources>
     <style name="Theme.Intercept" parent="Theme.Intercept.Base">
         <item name="android:windowSplashScreenBackground">@color/stone_lab_white</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_intercept_foreground</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@color/stone_lab_white</item>
     </style>
 </resources>
 ''')
+
+Path("src/app/src/main/res/drawable/intercept_launch_background.xml").write_text('''<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/stone_lab_white" />
+</layer-list>
+''')
+
+fg = Path("src/app/src/main/res/drawable/ic_launcher_foreground.xml")
+dst = Path("src/app/src/main/res/drawable/ic_intercept_foreground.xml")
+if fg.exists() and not dst.exists():
+    dst.write_text(fg.read_text())
+
+main_path = Path("src/app/src/main/java/com/nexarenew/aiconsole/MainActivity.kt")
+if main_path.exists():
+    main = main_path.read_text()
+    main = main.replace("painterResource(R.mipmap.ic_launcher)", "painterResource(R.drawable.ic_launcher_foreground)")
+    main = main.replace("painterResource(R.drawable.ic_intercept_foreground)", "painterResource(R.drawable.ic_launcher_foreground)")
+    main_path.write_text(main)
+
+observer = Path("src/app/src/main/java/com/nexarenew/aiconsole/tasks/ConnectivityRetryObserver.kt")
+if observer.exists():
+    text = observer.read_text()
+    text = text.replace(
+        "override fun onAvailable(network: Network) { OutboxRetryWorker.retryNow(context) }",
+        "override fun onAvailable(network: Network) { runCatching { OutboxRetryWorker.retryNow(context) } }",
+    )
+    observer.write_text(text)
+
+worker_path = Path("src/app/src/main/java/com/nexarenew/aiconsole/tasks/OutboxRetryWorker.kt")
+if worker_path.exists():
+    worker = worker_path.read_text()
+    worker = worker.replace("inputData.getBoolean(KEY_EXPLICIT)", "inputData.getBoolean(KEY_EXPLICIT, false)")
+    worker_path.write_text(worker)
 
 manifest_path = Path("src/app/src/main/AndroidManifest.xml")
 manifest = manifest_path.read_text()
