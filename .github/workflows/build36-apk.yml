@@ -40,6 +40,23 @@ jobs:
           grep -F 'fun onDowngrade' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
           grep -F 'versionCode = 36' src/app/build.gradle.kts
 
+      - name: Fix WorkManager Data.getBoolean defaultValue
+        run: |
+          set -euo pipefail
+          FILE=src/app/src/main/java/com/nexarenew/aiconsole/tasks/OutboxRetryWorker.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/app/src/main/java/com/nexarenew/aiconsole/tasks/OutboxRetryWorker.kt')
+          text = p.read_text()
+          old = 'inputData.getBoolean(KEY_EXPLICIT)'
+          new = 'inputData.getBoolean(KEY_EXPLICIT, false)'
+          if old not in text and new not in text:
+              raise SystemExit('expected getBoolean(KEY_EXPLICIT) not found')
+          p.write_text(text.replace(old, new))
+          print('patched OutboxRetryWorker getBoolean defaultValue')
+          PY
+          grep -F 'inputData.getBoolean(KEY_EXPLICIT, false)' "$FILE"
+
       - name: Restore Gradle wrapper jar and launcher icons
         run: |
           set -euo pipefail
