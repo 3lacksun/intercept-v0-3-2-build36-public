@@ -37,25 +37,17 @@ jobs:
           test -f src/gradlew
           test -f src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
           grep -F 'const val SCHEMA_VERSION = 19' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
-          grep -F 'fun onDowngrade' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
           grep -F 'versionCode = 36' src/app/build.gradle.kts
 
-      - name: Fix WorkManager Data.getBoolean defaultValue
+      - name: Harden boot path against same-version schema drift
         run: |
           set -euo pipefail
-          FILE=src/app/src/main/java/com/nexarenew/aiconsole/tasks/OutboxRetryWorker.kt
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('src/app/src/main/java/com/nexarenew/aiconsole/tasks/OutboxRetryWorker.kt')
-          text = p.read_text()
-          old = 'inputData.getBoolean(KEY_EXPLICIT)'
-          new = 'inputData.getBoolean(KEY_EXPLICIT, false)'
-          if old not in text and new not in text:
-              raise SystemExit('expected getBoolean(KEY_EXPLICIT) not found')
-          p.write_text(text.replace(old, new))
-          print('patched OutboxRetryWorker getBoolean defaultValue')
-          PY
-          grep -F 'inputData.getBoolean(KEY_EXPLICIT, false)' "$FILE"
+          python3 tools/harden_boot.py
+          grep -F 'fun onOpen' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
+          grep -F 'fun onDowngrade' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
+          grep -F 'tableExists' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
+          grep -F 'Database open/heal failed' src/app/src/main/java/com/nexarenew/aiconsole/KotlinCommandApp.kt
+          grep -F 'inputData.getBoolean(KEY_EXPLICIT, false)' src/app/src/main/java/com/nexarenew/aiconsole/tasks/OutboxRetryWorker.kt
 
       - name: Restore Gradle wrapper jar and launcher icons
         run: |
