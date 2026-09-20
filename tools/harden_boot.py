@@ -114,11 +114,11 @@ class KotlinCommandApp : Application() {
     override fun onCreate() {
         super.onCreate()
         runCatching { PDFBoxResourceLoader.init(this) }.onFailure {
-            Log.w("INTERCEPT", "PDFBox init skipped", it)
+            Log.w(\"INTERCEPT\", \"PDFBox init skipped\", it)
         }
         val db = AppDatabase(this)
         runCatching { db.writableDatabase }.onFailure {
-            Log.e("INTERCEPT", "Database open/heal failed", it)
+            Log.e(\"INTERCEPT\", \"Database open/heal failed\", it)
         }
         val keys = SecureKeyStore(this)
         repository = AppRepository(db, keys, ProviderClient())
@@ -144,4 +144,22 @@ class KotlinCommandApp : Application() {
 
 worker = worker_path.read_text()
 worker_path.write_text(worker.replace("inputData.getBoolean(KEY_EXPLICIT)", "inputData.getBoolean(KEY_EXPLICIT, false)"))
+
+main_path = Path("src/app/src/main/java/com/nexarenew/aiconsole/MainActivity.kt")
+main = main_path.read_text()
+old_icon = "painterResource(R.mipmap.ic_launcher)"
+new_icon = "painterResource(R.drawable.ic_intercept_foreground)"
+if old_icon not in main and new_icon not in main:
+    raise SystemExit("expected painterResource launcher icon not found")
+main_path.write_text(main.replace(old_icon, new_icon))
+
+theme31 = Path("src/app/src/main/res/values-v31/themes.xml")
+if theme31.exists():
+    xml = theme31.read_text()
+    xml = xml.replace(
+        "@mipmap/ic_launcher",
+        "@drawable/ic_intercept_foreground",
+    )
+    theme31.write_text(xml)
+
 print("boot-path patches applied")
