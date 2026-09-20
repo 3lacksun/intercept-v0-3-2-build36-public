@@ -102,16 +102,27 @@ Path("src/app/src/main/res/drawable/intercept_launch_background.xml").write_text
 </layer-list>
 ''')
 
-fg = Path("src/app/src/main/res/drawable/ic_launcher_foreground.xml")
-dst = Path("src/app/src/main/res/drawable/ic_intercept_foreground.xml")
-if fg.exists() and not dst.exists():
-    dst.write_text(fg.read_text())
+vector = '''<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#0B0B0B" android:pathData="M54,12 L88,26 L83,67 C80,78 69,87 54,96 C39,87 28,78 25,67 L20,26 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M37,31 H71 V41 H60 V69 H71 V79 H37 V69 H48 V41 H37 Z" />
+    <path android:fillColor="#B90212" android:pathData="M48,45 H60 V65 H48 Z" />
+</vector>
+'''
+drawable_dir = Path("src/app/src/main/res/drawable")
+drawable_dir.mkdir(parents=True, exist_ok=True)
+(drawable_dir / "ic_launcher_foreground.xml").write_text(vector)
+(drawable_dir / "ic_intercept_foreground.xml").write_text(vector)
 
 main_path = Path("src/app/src/main/java/com/nexarenew/aiconsole/MainActivity.kt")
 if main_path.exists():
     main = main_path.read_text()
-    main = main.replace("painterResource(R.mipmap.ic_launcher)", "painterResource(R.drawable.ic_launcher_foreground)")
-    main = main.replace("painterResource(R.drawable.ic_intercept_foreground)", "painterResource(R.drawable.ic_launcher_foreground)")
+    main = main.replace("painterResource(R.mipmap.ic_launcher)", "painterResource(R.drawable.ic_intercept_foreground)")
+    main = main.replace("painterResource(R.drawable.ic_launcher_foreground)", "painterResource(R.drawable.ic_intercept_foreground)")
     main_path.write_text(main)
 
 observer = Path("src/app/src/main/java/com/nexarenew/aiconsole/tasks/ConnectivityRetryObserver.kt")
