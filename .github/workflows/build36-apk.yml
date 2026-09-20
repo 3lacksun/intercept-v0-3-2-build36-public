@@ -51,7 +51,8 @@ jobs:
           grep -F 'fun onDowngrade' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
           grep -F 'tableExists' src/app/src/main/java/com/nexarenew/aiconsole/data/AppDatabase.kt
           grep -F 'Database open/heal failed' src/app/src/main/java/com/nexarenew/aiconsole/KotlinCommandApp.kt
-          grep -F 'painterResource(R.drawable.ic_launcher_foreground)' src/app/src/main/java/com/nexarenew/aiconsole/MainActivity.kt
+          grep -F 'painterResource(R.drawable.ic_intercept_foreground)' src/app/src/main/java/com/nexarenew/aiconsole/MainActivity.kt
+          test -f src/app/src/main/res/drawable/ic_intercept_foreground.xml
           grep -F '@color/stone_lab_white' src/app/src/main/res/drawable/intercept_launch_background.xml
           if grep -F 'windowSplashScreenAnimatedIcon' src/app/src/main/res/values-v31/themes.xml; then
             echo 'splash still sets an animated icon' >&2
