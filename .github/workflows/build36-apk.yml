@@ -6,10 +6,20 @@ on:
 env:
   EXPECTED_TEXTSRC_SHA256: d012e8478fcdc9e62e69161e157f63f0830537d0aaf84cee6a9c7055628573c6
   TEXTSRC_URL: https://litter.catbox.moe/1ku4z2.tgz
+  GRADLE_OPTS: >-
+    -Dorg.gradle.daemon=false
+    -Dorg.gradle.parallel=false
+    -Dorg.gradle.workers.max=2
+    -Dkotlin.compiler.execution.strategy=in-process
+    -Dkotlin.incremental=false
+    -Dfile.encoding=UTF-8
+    -Xmx4g
+    -XX:MaxMetaspaceSize=1536m
+    -XX:+UseSerialGC
 
 jobs:
   assemble-debug:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +29,7 @@ jobs:
           set -euo pipefail
           mkdir -p src evidence
           echo "Downloading SHA-pinned textsrc pack"
-          curl -fsSL "$TEXTSRC_URL" -o /tmp/textsrc.tgz
+          curl --fail --location --retry 3 --retry-delay 2 -o /tmp/textsrc.tgz "$TEXTSRC_URL"
           ACTUAL=$(sha256sum /tmp/textsrc.tgz | awk '{print $1}')
           echo "$ACTUAL" | tee evidence/textsrc.sha256
           test "$ACTUAL" = "$EXPECTED_TEXTSRC_SHA256"
@@ -34,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p src/gradle/wrapper
-          curl -fsSL -o src/gradle/wrapper/gradle-wrapper.jar \
+          curl --fail --location --retry 3 -o src/gradle/wrapper/gradle-wrapper.jar \
             https://raw.githubusercontent.com/gradle/gradle/v8.11.1/gradle/wrapper/gradle-wrapper.jar
           test -s src/gradle/wrapper/gradle-wrapper.jar
           python3 - <<'PY'
@@ -55,37 +65,41 @@ jobs:
               (d/'ic_launcher_round.png').write_bytes(png(size,size,(196,154,74)))
           print('generated placeholder icons')
           PY
-          chmod +x src/gradlew src/gradlew.bat || true
+          chmod +x src/gradlew
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: gradle
           cache-dependency-path: |
             src/**/*.gradle*
             src/**/gradle-wrapper.properties
 
-      - uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
-
-      - name: Install Android SDK 36 tooling
+      - name: Install Android API 36 and Build Tools 36
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;35.0.0"
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "sdk.dir=$ANDROID_HOME" > src/local.properties
 
       - name: Prepare Gradle
         working-directory: src
         run: |
           set -euo pipefail
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
           {
             echo org.gradle.daemon=false
             echo org.gradle.parallel=false
             echo org.gradle.workers.max=2
-            echo org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m -XX:+UseSerialGC -Dfile.encoding=UTF-8
+            echo org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1536m -XX:+UseSerialGC -Dfile.encoding=UTF-8
             echo kotlin.compiler.execution.strategy=in-process
             echo kotlin.incremental=false
           } >> gradle.properties
@@ -102,15 +116,15 @@ jobs:
         run: |
           set -euo pipefail
           APK=src/app/build/outputs/apk/debug/app-debug.apk
-          AAPT=$ANDROID_HOME/build-tools/35.0.0/aapt
-          ZIPALIGN=$ANDROID_HOME/build-tools/35.0.0/zipalign
-          APKSIGNER=$ANDROID_HOME/build-tools/35.0.0/apksigner
+          BT="$ANDROID_HOME/build-tools/36.0.0"
+          AAPT="$BT/aapt"
+          if [ ! -x "$AAPT" ]; then AAPT="$BT/aapt2"; fi
           "$AAPT" dump badging "$APK" | tee evidence/aapt-badging.txt
           grep -F "package: name='com.nexarenew.drstonecommand' versionCode='36' versionName='0.3.2'" evidence/aapt-badging.txt
           grep -F "sdkVersion:'26'" evidence/aapt-badging.txt
           grep -F "targetSdkVersion:'36'" evidence/aapt-badging.txt
-          "$ZIPALIGN" -c -v 4 "$APK" | tee evidence/zipalign.txt
-          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee evidence/apksigner.txt
+          "$BT/zipalign" -c -v 4 "$APK" | tee evidence/zipalign.txt
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee evidence/apksigner.txt
           sha256sum "$APK" | tee evidence/app-debug.apk.sha256
           cp "$APK" evidence/INTERCEPT_V0_3_2_BUILD36_DEBUG.apk
 
@@ -124,6 +138,7 @@ jobs:
           retention-days: 30
 
       - name: Upload debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: INTERCEPT_V0_3_2_BUILD36_DEBUG_APK
